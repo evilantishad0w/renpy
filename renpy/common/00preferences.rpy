@@ -1,4 +1,4 @@
-﻿# Copyright 2004-2015 Tom Rothamel <pytom@bishoujo.us>
+# Copyright 2004-2015 Tom Rothamel <pytom@bishoujo.us>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -20,6 +20,72 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 init -1500 python:
+
+    ## data structure
+
+    __preferences = {}
+    # __preferences[name] = {
+    #     "choices": [possible choices],
+    #     "takes_float": bool,
+    #     "takes_int": bool,
+    #     "callfunc": function_to_call }
+
+
+    ## insertion into data structure
+
+    @renpy.pure
+    def __registerPreference( name,
+                              callfunc,
+                              choices = (),
+                              takes_float = False,
+                              takes_int = False ):
+        
+        assert not __preferences.has_key(name)
+        __preferences[name] = { "choices": choices,
+                                "takes_float": takes_float,
+                                "takes_int": takes_int,
+                                "callfunc": callfunc }
+
+
+    @renpy.pure
+    def __registerToggle(name,field):
+
+        def f(value,field=field):
+            if value == "enable":
+                return SetField(_preferences, field, True)
+            if value == "disable":
+                return SetField(_preferences, field, False)
+            return ToggleField(_preferences, field)
+
+        __registerPreference(name,f,choices=("enable","disable","toggle"))
+                          
+
+    @renpy.pure
+    def __registerDToggle(name,d,field):
+
+        def f(value,d=d,field=field):
+            if value == "enable":
+                return SetDict(_d, field, True)
+            if value == "disable":
+                return SetDict(d, field, False)
+            return ToggleDict(d, field)
+
+        __registerPreference(name,f,choices=("enable","disable","toggle"))
+                          
+
+    @renpy.pure
+    def __registerMixer(name,mxr):
+
+        def f(value,mxr=mxr):
+            if value is None:
+                return MixerValue(mxr)
+            else:
+                return SetMixer(mxr,value)
+
+        __registerPreference(name,f)
+
+
+    ## system preferences
 
     @renpy.pure
     class __DisplayAction(Action, DictEquality):
@@ -45,7 +111,150 @@ init -1500 python:
 
     _m1_00screen__DisplayAction = __DisplayAction
 
+    def __p_display(value):
+        if value == "fullscreen":
+            return SetField(_preferences, "fullscreen", True)
+        if value == "window":
+            return __DisplayAction(1.0)
+        if value == "any window":
+            return SetField(_preferences, "fullscreen", False)
+        if isinstance(value, (int, float)):
+            return __DisplayAction(value)
+        return ToggleField(_preferences, "fullscreen")
+
+    __registerPreference( "display",
+                          callfunc = __p_display,
+                          choices = ("fullscreen","window","any window","toggle"),
+                          takes_float = True,
+                          takes_int = True )
+
+
+    def __p_transitions(value):
+        if value == "all":
+            return SetField(_preferences, "transitions", 2)
+        if value == "some":
+            return SetField(_preferences, "transitions", 1)
+        if value == "none":
+            return SetField(_preferences, "transitions", 0)
+        return ToggleField(_preferences, "transitions", true_value=2, false_value=0)
+
+    __registerPreference( "transitions",
+                          callfunc = __p_transitions,
+                          choices=("all","some","none","toggle") )
+
+
+    def __p_show_empty_window(value):
+        if value == "show":
+            return SetField(_preferences, "show_empty_window", True)
+        if value == "hide":
+            return SetField(_preferences, "show_empty_window", False)
+        return ToggleField(_preferences, "show_empty_window")
+
+    __registerPreference( "show empty window",
+                          callfunc = __p_show_empty_window,
+                          choices = ("show","hide","toggle") )
+
+
+    def __p_text_speed(value):
+        if value is None:
+            return FieldValue(_preferences, "text_cps", range=200, max_is_zero=True, style="slider")
+        if isinstance(value, int):
+            return SetField(_preferences, "text_cps", value)
+
+    __registerPreference( "text speed",
+                          callfunc = __p_text_speed )
+
+                          
     config.always_has_joystick = False
+
+    def __p_joystick(value):
+        if renpy.display.joystick.enabled or config.always_has_joystick:
+            return ShowMenu("joystick_preferences")
+        return None
+        
+    __registerPreference( "joystick",
+                          callfunc = __p_joystick )
+    __registerPreference( "joystick...",
+                          callfunc = __p_joystick )
+
+
+    def __p_skip(value):
+        if value == "all messages" or value == "all":
+            return SetField(_preferences, "skip_unseen", True)
+        if value == "seen messages" or value == "seen":
+            return SetField(_preferences, "skip_unseen", False)
+        return ToggleField(_preferences, "skip_unseen")
+
+    __registerPreference( "skip",
+                          callfunc = __p_skip,
+                          choices = ( "all","all messages",
+                                      "seen","seen_messages",
+                                      "toggle" ) )
+
+    __registerPreference("begin skipping",lambda x: Skip())
+
+
+    def __p_after_choices(value):
+        if value == "keep skipping" or value == "keep" or value == "skip":
+            return SetField(_preferences, "skip_after_choices", True)
+        if value == "stop skipping" or value == "stop":
+            return SetField(_preferences, "skip_after_choices", False)
+        return ToggleField(_preferences, "skip_after_choices")
+
+    __registerPreference( "after choices",
+                          callfunc = __p_after_choices,
+                          choices = ( "skip","keep","keep skipping",
+                                      "stop","stop_skipping",
+                                      "toggle" ) )
+
+
+    def __p_auto_forward_time(value):
+        if value is None:
+
+            if config.default_afm_enable is None:
+                return FieldValue(_preferences, "afm_time", range=30.0, max_is_zero=True, style="slider")
+            return FieldValue(_preferences, "afm_time", range=29.9, style="slider", offset=.1)
+
+        elif isinstance(value, int):
+            return SetField(_preferences, "afm_time", value)
+
+    __registerPreference( "auto-forward time",
+                          callfunc = __p_auto_forward_time )
+
+
+    __registerToggle("auto-forward","afm_enable")
+    __registerToggle("auto-forward_after_click","afm_after_click")
+    __registerToggle("automatic move","mouse_move")
+    __registerToggle("wait for voice","wait_voice")
+
+    __registerMixer("music volume","music")
+    __registerMixer("sound volume","sfx")
+    __registerMixer("voice volume","voice")
+
+    __registerDToggle("music mute",_preferences.mute,"music")
+    __registerDToggle("sound mute",_preferences.mute,"sfx")
+    __registerDToggle("voice mute",_preferences.mute,"voice")
+
+    __registerToggle("voice sustain","voice_sustain")
+    __registerToggle("self voicing","self_voicing")
+
+
+    def __p_clipboard_voicing(value):
+        if value == "enable":
+            return SetField(_preferences, "self_voicing", "clipboard")
+        if value == "disable":
+            return SetField(_preferences, "self_voicing", False)
+        return ToggleField(_preferences, "self_voicing", true_value="clipboard")
+
+    __registerPreference( "clipboard voicing",
+                          callfunc = __p_clipboard_voicing,
+                          choices = ("enable","disable","toggle") )
+
+
+    __registerToggle("emphasize audio","emphasize_audio")
+
+
+    ## public interface
 
     @renpy.pure
     def Preference(name, value=None):
@@ -149,223 +358,48 @@ init -1500 python:
          * Preference("voice volume")
          """
 
+        def show_exception():
+            raise Exception("Preference(%r, %r) is unknown." % (name , value))
+
         name = name.lower()
+        if not __preferences.has_key(name):
+            show_exception()
+
+        p = __preferences[name]
 
         if isinstance(value, basestring):
             value = value.lower()
 
-        def get():
+        while True:
+            if not p["choices"]:
+                 break
+            if value in p["choices"]:
+                 break
+            if p["takes_int"] and isinstance(value, int):
+                break
+            if p["takes_float"] and isinstance(value, float):
+                break
+            show_exception()
 
-            if name == "display":
-                if value == "fullscreen":
-                    return SetField(_preferences, "fullscreen", True)
-                elif value == "window":
-                    return __DisplayAction(1.0)
-                elif value == "any window":
-                    return SetField(_preferences, "fullscreen", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "fullscreen")
-                elif isinstance(value, (int, float)):
-                    return __DisplayAction(value)
-
-            elif name == "transitions":
-
-                if value == "all":
-                    return SetField(_preferences, "transitions", 2)
-                elif value == "some":
-                    return SetField(_preferences, "transitions", 1)
-                elif value == "none":
-                    return SetField(_preferences, "transitions", 0)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "transitions", true_value=2, false_value=0)
-
-            elif name == "show empty window":
-
-                if value == "show":
-                    return SetField(_preferences, "show_empty_window", True)
-                elif value == "hide":
-                    return SetField(_preferences, "show_empty_window", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "show_empty_window")
-
-            elif name == "text speed":
-
-                if value is None:
-                    return FieldValue(_preferences, "text_cps", range=200, max_is_zero=True, style="slider")
-                elif isinstance(value, int):
-                    return SetField(_preferences, "text_cps", value)
-
-            elif name == "joystick" or name == "joystick...":
-
-                if renpy.display.joystick.enabled or config.always_has_joystick:
-                    return ShowMenu("joystick_preferences")
-                else:
-                    return None
-
-            elif name == "skip":
-
-                if value == "all messages" or value == "all":
-                    return SetField(_preferences, "skip_unseen", True)
-                elif value == "seen messages" or value == "seen":
-                    return SetField(_preferences, "skip_unseen", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "skip_unseen")
-
-            elif name == "begin skipping":
-
-                return Skip()
-
-            elif name == "after choices":
-
-                if value == "keep skipping" or value == "keep" or value == "skip":
-                    return SetField(_preferences, "skip_after_choices", True)
-                elif value == "stop skipping" or value == "stop":
-                    return SetField(_preferences, "skip_after_choices", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "skip_after_choices")
-
-            elif name == "auto-forward time":
-
-                if value is None:
-
-                    if config.default_afm_enable is None:
-                        return FieldValue(_preferences, "afm_time", range=30.0, max_is_zero=True, style="slider")
-                    else:
-                        return FieldValue(_preferences, "afm_time", range=29.9, style="slider", offset=.1)
-
-                elif isinstance(value, int):
-                    return SetField(_preferences, "afm_time", value)
-
-            elif name == "auto-forward":
-
-                if value == "enable":
-                    return SetField(_preferences, "afm_enable", True)
-                elif value == "disable":
-                    return SetField(_preferences, "afm_enable", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "afm_enable")
-
-            elif name == "auto-forward after click":
-
-                if value == "enable":
-                    return SetField(_preferences, "afm_after_click", True)
-                elif value == "disable":
-                    return SetField(_preferences, "afm_after_click", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "afm_after_click")
-
-            elif name == "automatic move":
-
-                if value == "enable":
-                    return SetField(_preferences, "mouse_move", True)
-                elif value == "disable":
-                    return SetField(_preferences, "mouse_move", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "mouse_move")
-
-            elif name == "wait for voice":
-
-                if value == "enable":
-                    return SetField(_preferences, "wait_voice", True)
-                elif value == "disable":
-                    return SetField(_preferences, "wait_voice", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "wait_voice")
-
-            elif name == "music volume":
-
-                if value is None:
-                    return MixerValue('music')
-                else:
-                    return SetMixer('music', value)
-
-            elif name == "sound volume":
-
-                if value is None:
-                    return MixerValue('sfx')
-                else:
-                    return SetMixer('sfx', value)
-
-            elif name == "voice volume":
-
-                if value is None:
-                    return MixerValue('voice')
-                else:
-                    return SetMixer('voice', value)
-
-            elif name == "music mute":
-
-                if value == "enable":
-                    return SetDict(_preferences.mute, "music", True)
-                elif value == "disable":
-                    return SetDict(_preferences.mute, "music", False)
-                elif value == "toggle":
-                    return ToggleDict(_preferences.mute, "music")
-
-            elif name == "sound mute":
-
-                if value == "enable":
-                    return SetDict(_preferences.mute, "sfx", True)
-                elif value == "disable":
-                    return SetDict(_preferences.mute, "sfx", False)
-                elif value == "toggle":
-                    return ToggleDict(_preferences.mute, "sfx")
-
-            elif name == "voice mute":
-
-                if value == "enable":
-                    return SetDict(_preferences.mute, "voice", True)
-                elif value == "disable":
-                    return SetDict(_preferences.mute, "voice", False)
-                elif value == "toggle":
-                    return ToggleDict(_preferences.mute, "voice")
-
-            elif name == "voice sustain":
-
-                if value == "enable":
-                    return SetField(_preferences, "voice_sustain", True)
-                elif value == "disable":
-                    return SetField(_preferences, "voice_sustain", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "voice_sustain")
-
-            elif name == "self voicing":
-
-                if value == "enable":
-                    return SetField(_preferences, "self_voicing", True)
-                elif value == "disable":
-                    return SetField(_preferences, "self_voicing", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "self_voicing")
-
-            elif name == "clipboard voicing":
-
-                if value == "enable":
-                    return SetField(_preferences, "self_voicing", "clipboard")
-                elif value == "disable":
-                    return SetField(_preferences, "self_voicing", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "self_voicing", true_value="clipboard")
-
-            elif name == "emphasize audio":
-
-                if value == "enable":
-                    return SetField(_preferences, "emphasize_audio", True)
-                elif value == "disable":
-                    return SetField(_preferences, "emphasize_audio", False)
-                elif value == "toggle":
-                    return ToggleField(_preferences, "emphasize_audio")
-
-            else:
-                raise Exception("Preference(%r, %r) is unknown." % (name , value))
-
-        rv = get()
+        rv = p["callfunc"](value)
 
         if rv is not None:
             rv.alt = name + " [text]"
 
         return rv
 
+
+    def registerPreference( name,
+                            callfunc,
+                            choices = (),
+                            takes_float = False,
+                            takes_int = False ):
+        name = name.lower()
+        assert name.startswith('u_')
+        __registerPreference(name,choices,calledfunc)
+
+
+    ## self-voicing display
 
     def __show_self_voicing():
         has_screen = renpy.get_screen("_self_voicing")
@@ -376,6 +410,8 @@ init -1500 python:
             renpy.hide_screen("_self_voicing")
 
     config.interact_callbacks.append(__show_self_voicing)
+
+
 
 init -1500:
 
