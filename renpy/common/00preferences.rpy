@@ -65,7 +65,7 @@ init -1500 python:
 
         def f(value,d=d,field=field):
             if value == "enable":
-                return SetDict(_d, field, True)
+                return SetDict(d, field, True)
             if value == "disable":
                 return SetDict(d, field, False)
             return ToggleDict(d, field)
