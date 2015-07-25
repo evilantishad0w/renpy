@@ -411,6 +411,15 @@ class _MultiPersistent(object):
             os.unlink(fn)
             os.rename(fn + ".new", fn)
 
+    def _clear(self):
+
+        for name in self.__dict__.keys():
+            if name.startswith("__") and name.endswith("__"):
+                continue
+            if name in ("save","_clear"):
+                continue
+            del self.__dict__[name]
+
 
 def MultiPersistent(name):
 
