@@ -1,4 +1,4 @@
-﻿# Copyright 2004-2015 Tom Rothamel <pytom@bishoujo.us>
+# Copyright 2004-2015 Tom Rothamel <pytom@bishoujo.us>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -48,6 +48,30 @@ init -1600 python:
 
         def get_selected(self):
             return getattr(self.object, self.field) == self.value
+
+    @renpy.pure
+    class SetPersistent(Action, FieldEquality):
+        """
+         :doc: data_action
+
+         Causes a field in persistent to be set to a given value.
+         `field` is a string giving the name of the
+         field to set, and `value` is the value to set it to.
+         """
+
+        identity_fields = [ "object", "value" ]
+        equality_fields = [ "value" ]
+
+        def __init__(self, field, value):
+            self.field = field
+            self.value = value
+
+        def __call__(self):
+            setattr(persistent, self.field, self.value)
+            renpy.restart_interaction()
+
+        def get_selected(self):
+            return getattr(persistent, self.field) == self.value
 
     @renpy.pure
     def SetVariable(variable, value):
